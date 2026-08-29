@@ -3,6 +3,12 @@ import { useEffect, useState } from "react";
 
 function App() {
   // =====================================================
+  // BACKEND URL
+  // =====================================================
+
+  const API_URL = "https://codealpha-social-media-web.onrender.com";
+
+  // =====================================================
   // AUTH
   // =====================================================
 
@@ -75,14 +81,11 @@ function App() {
 
       if (!token) return;
 
-      const response = await fetch(
-        "http://https://codealpha-social-media-web.onrender.com/api/posts",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const response = await fetch(`${API_URL}/api/posts`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+      });
 
       const data = await response.json();
 
@@ -115,14 +118,11 @@ function App() {
 
       if (!token) return;
 
-      const response = await fetch(
-        "http://https://codealpha-social-media-web.onrender.com/api/users/me",
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const response = await fetch(`${API_URL}/api/users/me`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+      });
 
       const data = await response.json();
 
@@ -168,9 +168,7 @@ function App() {
     setMessage("");
 
     try {
-      const url = isLogin
-        ? "http://localhost:5000/api/login"
-        : "http://localhost:5000/api/register";
+      const url = isLogin ? `${API_URL}/api/login` : `${API_URL}/api/register`;
 
       const body = isLogin
         ? {
@@ -194,6 +192,8 @@ function App() {
       });
 
       const data = await response.json();
+
+      console.log("AUTH:", response.status, data);
 
       if (!response.ok) {
         setMessage(data.message || "Something went wrong");
@@ -255,6 +255,7 @@ function App() {
     setConnectionUsers([]);
     setActivePage("home");
   };
+
   // =====================================================
   // CREATE POST
   // =====================================================
@@ -273,21 +274,18 @@ function App() {
         return;
       }
 
-      const response = await fetch(
-        "https://codealpha-social-media-web.onrender.com/api/posts",
-        {
-          method: "POST",
+      const response = await fetch(`${API_URL}/api/posts`, {
+        method: "POST",
 
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-
-          body: JSON.stringify({
-            content: postContent.trim(),
-          }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-      );
+
+        body: JSON.stringify({
+          content: postContent.trim(),
+        }),
+      });
 
       const data = await response.json();
 
@@ -323,16 +321,13 @@ function App() {
         return;
       }
 
-      const response = await fetch(
-        `http://https://codealpha-social-media-web.onrender.com/api/posts/${postId}/like`,
-        {
-          method: "PUT",
+      const response = await fetch(`${API_URL}/api/posts/${postId}/like`, {
+        method: "PUT",
 
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+      });
 
       const data = await response.json();
 
@@ -375,9 +370,7 @@ function App() {
       }
 
       const response = await fetch(
-        `http://https://codealpha-social-media-web.onrender.com/api/users/search/${encodeURIComponent(
-          searchName.trim(),
-        )}`,
+        `${API_URL}/api/users/search/${encodeURIComponent(searchName.trim())}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -425,7 +418,7 @@ function App() {
       }
 
       const response = await fetch(
-        `http://https://codealpha-social-media-web.onrender.com/api/users/${searchUser._id}/follow`,
+        `${API_URL}/api/users/${searchUser._id}/follow`,
         {
           method: "POST",
 
@@ -481,14 +474,11 @@ function App() {
       setConnectionPage(type);
       setConnectionUsers([]);
 
-      const response = await fetch(
-        `http://https://codealpha-social-media-web.onrender.com/api/users/connections/${type}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      const response = await fetch(`${API_URL}/api/users/connections/${type}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+      });
 
       const data = await response.json();
 
@@ -1011,8 +1001,6 @@ function App() {
 
   // =====================================================
   // MAIN PAGE
-  // IMPORTANT:
-  // YAHAN HAR PAGE SIRF EK BAAR RENDER HOGA
   // =====================================================
 
   return (
@@ -1043,10 +1031,7 @@ function App() {
         </div>
       </header>
 
-      {/* =================================================
-          PAGE CONTENT
-          ONLY ONE PAGE RENDERS AT A TIME
-      ================================================= */}
+      {/* PAGE CONTENT */}
 
       {connectionPage ? (
         <ConnectionsPage />
