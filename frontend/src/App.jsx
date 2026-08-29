@@ -75,11 +75,14 @@ function App() {
 
       if (!token) return;
 
-      const response = await fetch("http://localhost:5000/api/posts", {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await fetch(
+        "http://https://codealpha-social-media-web.onrender.com/api/posts",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       const data = await response.json();
 
@@ -112,11 +115,14 @@ function App() {
 
       if (!token) return;
 
-      const response = await fetch("http://localhost:5000/api/users/me", {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await fetch(
+        "http://https://codealpha-social-media-web.onrender.com/api/users/me",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       const data = await response.json();
 
@@ -267,18 +273,21 @@ function App() {
         return;
       }
 
-      const response = await fetch("http://localhost:5000/api/posts", {
-        method: "POST",
+      const response = await fetch(
+        "https://codealpha-social-media-web.onrender.com/api/posts",
+        {
+          method: "POST",
 
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+
+          body: JSON.stringify({
+            content: postContent.trim(),
+          }),
         },
-
-        body: JSON.stringify({
-          content: postContent.trim(),
-        }),
-      });
+      );
 
       const data = await response.json();
 
@@ -315,7 +324,7 @@ function App() {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/posts/${postId}/like`,
+        `http://https://codealpha-social-media-web.onrender.com/api/posts/${postId}/like`,
         {
           method: "PUT",
 
@@ -366,7 +375,7 @@ function App() {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/users/search/${encodeURIComponent(
+        `http://https://codealpha-social-media-web.onrender.com/api/users/search/${encodeURIComponent(
           searchName.trim(),
         )}`,
         {
@@ -416,7 +425,7 @@ function App() {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/users/${searchUser._id}/follow`,
+        `http://https://codealpha-social-media-web.onrender.com/api/users/${searchUser._id}/follow`,
         {
           method: "POST",
 
@@ -473,7 +482,7 @@ function App() {
       setConnectionUsers([]);
 
       const response = await fetch(
-        `http://localhost:5000/api/users/connections/${type}`,
+        `http://https://codealpha-social-media-web.onrender.com/api/users/connections/${type}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
