@@ -5,8 +5,7 @@ import { useEffect, useState } from "react";
 // LIVE BACKEND URL
 // =====================================================
 
-const API_URL = "https://codealpha-social-media-web.onrender.com";
-
+const API_URL = import.meta.env.VITE_API_URL;
 function App() {
   // =====================================================
   // AUTH
