@@ -10,6 +10,7 @@ const User = require("./models/User");
 const Post = require("./models/Post");
 const Notification = require("./models/Notification");
 const Story = require("./models/Story");
+const Message = require("./models/Message");
 
 const authMiddleware = require("./middleware/authMiddleware");
 
@@ -713,6 +714,123 @@ app.get("/api/stories", authMiddleware, async (req, res) => {
       message: "Server error",
       error: error.message,
     });
+  }
+});
+
+// =====================================================
+// COMMENTS
+// =====================================================
+
+app.post("/api/posts/:id/comment", authMiddleware, async (req, res) => {
+  try {
+    const { text } = req.body;
+    const postId = req.params.id;
+    const userId = req.user.userId;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: "Comment cannot be empty" });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const user = await User.findById(userId).select("name");
+
+    const newComment = {
+      userId,
+      userName: user?.name || "VIORA User",
+      text: text.trim(),
+      createdAt: new Date(),
+    };
+
+    if (!Array.isArray(post.comments)) {
+      post.comments = [];
+    }
+
+    post.comments.push(newComment);
+    await post.save();
+
+    // Notify author if someone else commented
+    if (post.userId.toString() !== userId.toString()) {
+      try {
+        await Notification.create({
+          recipient: post.userId,
+          sender: userId,
+          type: "comment",
+          post: post._id,
+          message: `${user?.name || "Someone"} commented: "${text.trim().slice(0, 30)}"`,
+        });
+      } catch (notifErr) {
+        console.error("Comment notification error:", notifErr);
+      }
+    }
+
+    res.status(201).json({
+      message: "Comment added successfully",
+      comments: post.comments,
+    });
+  } catch (error) {
+    console.error("Comment error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+// =====================================================
+// MESSAGES / CHAT
+// =====================================================
+
+app.get("/api/messages/conversations", authMiddleware, async (req, res) => {
+  try {
+    const users = await User.find({ _id: { $ne: req.user.userId } })
+      .select("name email username")
+      .limit(50);
+    res.json(users);
+  } catch (error) {
+    console.error("Conversations error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+app.get("/api/messages/:recipientId", authMiddleware, async (req, res) => {
+  try {
+    const currentUserId = req.user.userId;
+    const recipientId = req.params.recipientId;
+
+    const messages = await Message.find({
+      $or: [
+        { sender: currentUserId, recipient: recipientId },
+        { sender: recipientId, recipient: currentUserId },
+      ],
+    }).sort({ createdAt: 1 });
+
+    res.json(messages);
+  } catch (error) {
+    console.error("Get messages error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+app.post("/api/messages", authMiddleware, async (req, res) => {
+  try {
+    const { recipientId, text } = req.body;
+    const sender = req.user.userId;
+
+    if (!recipientId || !text || !text.trim()) {
+      return res.status(400).json({ message: "Recipient and text required" });
+    }
+
+    const message = await Message.create({
+      sender,
+      recipient: recipientId,
+      text: text.trim(),
+    });
+
+    res.status(201).json(message);
+  } catch (error) {
+    console.error("Send message error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 

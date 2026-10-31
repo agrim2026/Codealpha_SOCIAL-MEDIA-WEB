@@ -1,5 +1,22 @@
 import "./App.css";
 import { useEffect, useState, useRef } from "react";
+import {
+  Home,
+  Search,
+  PlusSquare,
+  MessageCircle,
+  Heart,
+  User,
+  Send,
+  Image as ImageIcon,
+  X,
+  ArrowLeft,
+  Share2,
+  MessageSquare,
+  LogOut,
+  Bell,
+  Trash2,
+} from "lucide-react";
 
 // =====================================================
 // LIVE BACKEND API URL
@@ -68,9 +85,18 @@ function App() {
   // =====================================================
   // CHAT
   // =====================================================
+  const [chatUsers, setChatUsers] = useState([]);
+  const [selectedChatUser, setSelectedChatUser] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSearchText, setChatSearchText] = useState("");
+  const chatBodyRef = useRef(null);
 
-  const [selectedChat, setSelectedChat] = useState(null);
-  const [chatMessage, setChatMessage] = useState("");
+  // =====================================================
+  // COMMENTS
+  // =====================================================
+  const [expandedComments, setExpandedComments] = useState({});
+  const [commentInputs, setCommentInputs] = useState({});
 
   // =====================================================
   // FOLLOWING / FOLLOWERS
@@ -287,7 +313,7 @@ function App() {
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.message || "Story upload failed âŒ");
+        alert(data.message || "Story upload failed");
         return;
       }
 
@@ -295,10 +321,10 @@ function App() {
       setStoryCaption("");
       setShowStoryModal(false);
       await fetchStories();
-      alert("Story posted successfully! âœ¨");
+      alert("Story posted successfully!");
     } catch (error) {
       console.error("Story upload error:", error);
-      alert("Could not post story âŒ");
+      alert("Could not post story");
     } finally {
       setIsUploadingStory(false);
     }
@@ -326,6 +352,150 @@ function App() {
   };
 
   // =====================================================
+  // COMMENTS HANDLERS
+  // =====================================================
+  const handleToggleComments = (postId) => {
+    setExpandedComments((prev) => ({
+      ...prev,
+      [postId]: !prev[postId],
+    }));
+  };
+
+  const handleAddComment = async (postId) => {
+    const text = (commentInputs[postId] || "").trim();
+    if (!text) return;
+
+    try {
+      const token = getToken();
+      if (!token) {
+        alert("Please login again.");
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/api/posts/${postId}/comment`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.message || "Failed to add comment");
+        return;
+      }
+
+      setPosts((prevPosts) =>
+        prevPosts.map((p) =>
+          p._id === postId ? { ...p, comments: data.comments } : p
+        )
+      );
+
+      setCommentInputs((prev) => ({
+        ...prev,
+        [postId]: "",
+      }));
+
+      await fetchNotifications();
+    } catch (error) {
+      console.error("Add comment error:", error);
+    }
+  };
+
+  // =====================================================
+  // CHAT / MESSAGES HANDLERS
+  // =====================================================
+  const fetchChatUsers = async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const response = await fetch(`${API_URL}/api/messages/conversations`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) return;
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setChatUsers(data);
+      }
+    } catch (error) {
+      console.error("Fetch chat users error:", error);
+    }
+  };
+
+  const fetchChatMessages = async (recipientId) => {
+    if (!recipientId) return;
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const response = await fetch(`${API_URL}/api/messages/${recipientId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) return;
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setChatMessages(data);
+        setTimeout(() => {
+          if (chatBodyRef.current) {
+            chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+          }
+        }, 50);
+      }
+    } catch (error) {
+      console.error("Fetch chat messages error:", error);
+    }
+  };
+
+  const handleSelectChatUser = (chatUser) => {
+    setSelectedChatUser(chatUser);
+    fetchChatMessages(chatUser._id);
+  };
+
+  const handleSendMessage = async () => {
+    const text = chatInput.trim();
+    if (!text || !selectedChatUser) return;
+
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      setChatInput("");
+
+      const response = await fetch(`${API_URL}/api/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          recipientId: selectedChatUser._id,
+          text,
+        }),
+      });
+
+      if (!response.ok) return;
+      const newMsg = await response.json();
+      setChatMessages((prev) => [...prev, newMsg]);
+      setTimeout(() => {
+        if (chatBodyRef.current) {
+          chatBodyRef.current.scrollTop = chatBodyRef.current.scrollHeight;
+        }
+      }, 50);
+    } catch (error) {
+      console.error("Send message error:", error);
+    }
+  };
+
+  // =====================================================
   // INITIAL FETCH
   // =====================================================
 
@@ -335,15 +505,27 @@ function App() {
       fetchPosts();
       fetchStories();
       fetchNotifications();
+      fetchChatUsers();
 
-      // Periodic check for new like notifications
+      // Periodic check for notifications
       const interval = setInterval(() => {
         fetchNotifications();
-      }, 12000);
+      }, 10000);
 
       return () => clearInterval(interval);
     }
   }, [user?.id]);
+
+  // Polling for active chat
+  useEffect(() => {
+    if (activePage === "messages" && selectedChatUser) {
+      fetchChatMessages(selectedChatUser._id);
+      const chatInterval = setInterval(() => {
+        fetchChatMessages(selectedChatUser._id);
+      }, 4000);
+      return () => clearInterval(chatInterval);
+    }
+  }, [activePage, selectedChatUser?._id]);
 
   // =====================================================
   // LOGIN / REGISTER
@@ -421,7 +603,7 @@ function App() {
     } catch (error) {
       console.error("Auth error:", error);
 
-      setMessage("Server se connect nahi ho pa raha âŒ");
+      setMessage("Server se connect nahi ho pa raha");
     }
   };
 
@@ -449,7 +631,7 @@ function App() {
 
   const handleCreatePost = async () => {
     if (!postContent.trim() && !postImage) {
-      alert("Please write something or select a photo! 📷");
+      alert("Please write something or select a photo!");
       return;
     }
 
@@ -480,7 +662,7 @@ function App() {
       console.log("CREATE POST:", response.status, data);
 
       if (!response.ok) {
-        alert(data.message || "Post create nahi hua ❌");
+        alert(data.message || "Post create nahi hua");
         return;
       }
 
@@ -493,7 +675,7 @@ function App() {
     } catch (error) {
       console.error("Create post error:", error);
 
-      alert("Server se connect nahi ho pa raha ❌");
+      alert("Server se connect nahi ho pa raha");
     }
   };
 
@@ -527,7 +709,7 @@ function App() {
       console.log("LIKE RESPONSE:", data);
 
       if (!response.ok) {
-        alert(data.message || "Like failed âŒ");
+        alert(data.message || "Like failed");
         return;
       }
 
@@ -536,7 +718,7 @@ function App() {
     } catch (error) {
       console.error("Like error:", error);
 
-      alert("Server se connect nahi ho pa raha âŒ");
+      alert("Server se connect nahi ho pa raha");
     }
   };
 
@@ -697,7 +879,7 @@ function App() {
     } catch (error) {
       console.error("Connections error:", error);
 
-      alert("Server se connect nahi ho pa raha âŒ");
+      alert("Server se connect nahi ho pa raha");
     } finally {
       setConnectionLoading(false);
     }
@@ -822,7 +1004,7 @@ function App() {
       {/* WELCOME */}
 
       <div className="home-welcome">
-        <h2>Welcome to VIORA âœ¨</h2>
+        <h2>Welcome to VIORA ✨</h2>
 
         <p>See what's happening with people you follow.</p>
       </div>
@@ -833,7 +1015,7 @@ function App() {
 
       {posts.length === 0 ? (
         <div className="empty">
-          <div className="empty-icon">âœ¨</div>
+          <div className="empty-icon"><MessageSquare size={44} color="#8e8e8e" /></div>
 
           <h3>Your feed is empty</h3>
 
@@ -876,8 +1058,9 @@ function App() {
                 <button
                   className="more-btn"
                   onClick={() => alert("More options coming soon")}
+                  aria-label="More options"
                 >
-                  â‹¯
+                  <MoreVertical size={18} />
                 </button>
               </div>
 
@@ -898,17 +1081,97 @@ function App() {
               <div className="post-actions">
                 <button
                   onClick={() => handleLike(post._id)}
-                  className={isLiked ? "liked" : ""}
+                  className={`post-action-btn ${isLiked ? "liked" : ""}`}
+                  aria-label="Like"
                 >
-                  {isLiked ? "â™¥" : "â™¡"} {likeCount}
+                  <Heart
+                    size={19}
+                    fill={isLiked ? "#ed4956" : "none"}
+                    color={isLiked ? "#ed4956" : "currentColor"}
+                  />
+                  <span>{likeCount}</span>
                 </button>
 
-                <button onClick={() => alert("Comments coming soon ðŸ’¬")}>
-                  ðŸ’¬
+                <button
+                  className="post-action-btn"
+                  onClick={() => handleToggleComments(post._id)}
+                  aria-label="Comments"
+                >
+                  <MessageCircle size={19} />
+                  <span>{Array.isArray(post.comments) ? post.comments.length : 0}</span>
                 </button>
 
-                <button onClick={() => alert("Share coming soon â†—ï¸")}>â†—</button>
+                <button
+                  className="post-action-btn"
+                  onClick={() => {
+                    if (navigator.clipboard) {
+                      navigator.clipboard.writeText(window.location.href);
+                    }
+                    alert("Post link copied to clipboard!");
+                  }}
+                  aria-label="Share"
+                >
+                  <Share2 size={19} />
+                </button>
               </div>
+
+              {/* COMMENTS SECTION */}
+              {expandedComments[post._id] && (
+                <div className="comments-section">
+                  <div className="comments-list">
+                    {(!post.comments || post.comments.length === 0) ? (
+                      <p style={{ fontSize: "13px", color: "rgba(255,255,255,0.5)", textAlign: "center", padding: "10px 0" }}>
+                        No comments yet. Be the first to comment!
+                      </p>
+                    ) : (
+                      post.comments.map((c, cIdx) => (
+                        <div className="comment-item" key={c._id || cIdx}>
+                          <div className="comment-avatar">
+                            {c.userName?.charAt(0)?.toUpperCase() || "U"}
+                          </div>
+                          <div className="comment-body">
+                            <span className="comment-user">{c.userName || "User"}</span>
+                            <span className="comment-text">{c.text}</span>
+                            {c.createdAt && (
+                              <div className="comment-time">
+                                {new Date(c.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="comment-input-box">
+                    <input
+                      type="text"
+                      className="comment-input"
+                      placeholder="Write a comment..."
+                      value={commentInputs[post._id] || ""}
+                      onChange={(e) =>
+                        setCommentInputs((prev) => ({
+                          ...prev,
+                          [post._id]: e.target.value,
+                        }))
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleAddComment(post._id);
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className="comment-submit-btn"
+                      onClick={() => handleAddComment(post._id)}
+                      aria-label="Post comment"
+                    >
+                      <Send size={15} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </article>
           );
         })
@@ -938,8 +1201,8 @@ function App() {
           }}
         />
 
-        <button className="search-btn" onClick={handleSearchUser}>
-          ðŸ”
+        <button className="search-btn" onClick={handleSearchUser} aria-label="Search">
+          <Search size={18} />
         </button>
       </section>
 
@@ -995,7 +1258,7 @@ function App() {
               onClick={() => setPostImage("")}
               title="Remove image"
             >
-              ✕
+              <X size={16} />
             </button>
           </div>
         )}
@@ -1015,7 +1278,7 @@ function App() {
             onClick={() => postFileInputRef.current?.click()}
             title="Add photo"
           >
-            📷 Photo
+            <ImageIcon size={18} /> Photo
           </button>
 
           <button className="post-submit-btn" onClick={handleCreatePost}>
@@ -1030,88 +1293,142 @@ function App() {
   // MESSAGES PAGE
   // =====================================================
 
-  const MessagesPage = () => (
-    <div className="page-content messages-page">
-      <h1 className="page-title">Messages</h1>
+  const MessagesPage = () => {
+    const filteredUsers = chatUsers.filter((u) =>
+      (u.name || "").toLowerCase().includes(chatSearchText.toLowerCase())
+    );
 
-      <div className="messages-container">
-        <div className="chat-list">
-          <div className="chat-search">
-            <input type="text" placeholder="Search chats..." />
-          </div>
+    return (
+      <div className="page-content messages-page">
+        <h1 className="page-title">Messages</h1>
 
-          <div
-            className={`chat-user ${selectedChat ? "active-chat" : ""}`}
-            onClick={() =>
-              setSelectedChat({
-                name: "VIORA User",
+        <div className="messages-container">
+          <div className="chat-list">
+            <div className="chat-search">
+              <input
+                type="text"
+                placeholder="Search chats..."
+                value={chatSearchText}
+                onChange={(e) => setChatSearchText(e.target.value)}
+              />
+            </div>
+
+            {filteredUsers.length === 0 ? (
+              <div className="no-chat" style={{ padding: "30px 10px", textAlign: "center" }}>
+                <p style={{ color: "#777", fontSize: "14px" }}>
+                  {chatSearchText ? "No matching users" : "No users found. Search or follow users to start chatting!"}
+                </p>
+              </div>
+            ) : (
+              filteredUsers.map((u) => {
+                const isSelected = selectedChatUser?._id === u._id;
+                const uLetter = u.name?.charAt(0)?.toUpperCase() || "U";
+
+                return (
+                  <div
+                    key={u._id}
+                    className={`chat-user ${isSelected ? "active-chat" : ""}`}
+                    onClick={() => handleSelectChatUser(u)}
+                  >
+                    <div className="chat-avatar">{uLetter}</div>
+
+                    <div className="chat-user-info">
+                      <strong>{u.name || "User"}</strong>
+                      <span>Start a conversation</span>
+                    </div>
+                  </div>
+                );
               })
-            }
-          >
-            <div className="chat-avatar">V</div>
-
-            <div className="chat-user-info">
-              <strong>VIORA User</strong>
-
-              <span>Start a conversation</span>
-            </div>
+            )}
           </div>
-        </div>
 
-        <div className="chat-window">
-          {!selectedChat ? (
-            <div className="no-chat">
-              <div className="no-chat-icon">ðŸ’¬</div>
-
-              <h3>Your Messages</h3>
-
-              <p>Select a user to start chatting.</p>
-            </div>
-          ) : (
-            <>
-              <div className="chat-header">
-                <div className="chat-avatar">V</div>
-
-                <div className="chat-user-info">
-                  <strong>{selectedChat.name}</strong>
+          <div className="chat-window">
+            {!selectedChatUser ? (
+              <div className="no-chat">
+                <div className="no-chat-icon">
+                  <MessageCircle size={46} color="#8e8e8e" />
                 </div>
-              </div>
 
-              <div className="chat-body">
-                {chatMessage && (
-                  <div className="chat-message">{chatMessage}</div>
-                )}
-              </div>
+                <h3>Your Messages</h3>
 
-              <div className="chat-input-area">
-                <input
-                  type="text"
-                  placeholder="Message..."
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && chatMessage.trim()) {
-                      setChatMessage("");
-                    }
-                  }}
-                />
-
-                <button
-                  onClick={() => {
-                    if (chatMessage.trim()) {
-                      setChatMessage("");
-                    }
-                  }}
-                >
-                  âž¤
-                </button>
+                <p>Select a user to start chatting in real time.</p>
               </div>
-            </>
-          )}
+            ) : (
+              <>
+                <div className="chat-header">
+                  <div className="chat-avatar">
+                    {selectedChatUser.name?.charAt(0)?.toUpperCase() || "U"}
+                  </div>
+
+                  <div className="chat-user-info">
+                    <strong>{selectedChatUser.name}</strong>
+                  </div>
+                </div>
+
+                <div className="chat-body" ref={chatBodyRef}>
+                  {chatMessages.length === 0 ? (
+                    <div className="empty" style={{ margin: "auto", textAlign: "center" }}>
+                      <p style={{ color: "#888", fontSize: "14px" }}>
+                        Say hi to {selectedChatUser.name}! 👋
+                      </p>
+                    </div>
+                  ) : (
+                    chatMessages.map((msg, idx) => {
+                      const currentUserId = user?.id || user?._id;
+                      const senderId = msg.sender?._id || msg.sender;
+                      const isSent =
+                        senderId?.toString() === currentUserId?.toString();
+
+                      return (
+                        <div
+                          key={msg._id || idx}
+                          className={`chat-msg-row ${isSent ? "sent" : "received"}`}
+                        >
+                          <div className="chat-bubble">
+                            <div>{msg.text}</div>
+                            {msg.createdAt && (
+                              <div className="chat-time">
+                                {new Date(msg.createdAt).toLocaleTimeString([], {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="chat-input-area">
+                  <input
+                    type="text"
+                    placeholder="Message..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSendMessage();
+                      }
+                    }}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={handleSendMessage}
+                    aria-label="Send message"
+                  >
+                    <Send size={18} />
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  };
 
   // =====================================================
   // FOLLOWERS / FOLLOWING PAGE
@@ -1129,8 +1446,9 @@ function App() {
               setConnectionPage(null);
               setConnectionUsers([]);
             }}
+            aria-label="Back"
           >
-            â†
+            <ArrowLeft size={24} />
           </button>
 
           <h1 className="page-title">{title}</h1>
@@ -1146,7 +1464,9 @@ function App() {
           </div>
         ) : connectionUsers.length === 0 ? (
           <div className="empty">
-            <div className="empty-icon">ðŸ‘¥</div>
+            <div className="empty-icon">
+              <User size={48} color="#8e8e8e" />
+            </div>
 
             <h3>
               {connectionPage === "followers"
@@ -1191,8 +1511,9 @@ function App() {
         <button
           className="back-btn"
           onClick={() => setActivePage("home")}
+          aria-label="Back"
         >
-          ←
+          <ArrowLeft size={24} />
         </button>
         <h1 className="page-title">Notifications</h1>
       </div>
@@ -1309,8 +1630,12 @@ function App() {
 
         <br />
 
-        <button className="logout-profile-btn" onClick={handleLogout}>
-          Logout
+        <button
+          className="logout-profile-btn"
+          onClick={handleLogout}
+          style={{ display: "inline-flex", alignItems: "center", gap: "8px", justifyContent: "center" }}
+        >
+          <LogOut size={16} /> Logout
         </button>
       </div>
     );
@@ -1333,7 +1658,7 @@ function App() {
             onClick={() => setActivePage("create")}
             aria-label="Create"
           >
-            ï¼‹
+            <PlusSquare size={22} />
           </button>
         </div>
 
@@ -1345,7 +1670,7 @@ function App() {
             onClick={openNotifications}
             aria-label="Notifications"
           >
-            ♡
+            <Heart size={22} />
             {unreadCount > 0 && (
               <span className="notification-badge">{unreadCount}</span>
             )}
@@ -1386,7 +1711,6 @@ function App() {
 
       <nav className="bottom-nav">
         {/* HOME */}
-
         <button
           className={`bottom-nav-btn ${
             activePage === "home" && !connectionPage ? "active" : ""
@@ -1398,11 +1722,10 @@ function App() {
           }}
           aria-label="Home"
         >
-          <span>âŒ‚</span>
+          <Home size={22} />
         </button>
 
         {/* SEARCH */}
-
         <button
           className={`bottom-nav-btn ${
             activePage === "search" && !connectionPage ? "active" : ""
@@ -1414,11 +1737,10 @@ function App() {
           }}
           aria-label="Search"
         >
-          <span>âŒ•</span>
+          <Search size={22} />
         </button>
 
         {/* CREATE */}
-
         <button
           className={`bottom-nav-btn ${
             activePage === "create" && !connectionPage ? "active" : ""
@@ -1430,11 +1752,10 @@ function App() {
           }}
           aria-label="Create"
         >
-          <span>ï¼‹</span>
+          <PlusSquare size={22} />
         </button>
 
         {/* MESSAGES */}
-
         <button
           className={`bottom-nav-btn ${
             activePage === "messages" && !connectionPage ? "active" : ""
@@ -1446,11 +1767,10 @@ function App() {
           }}
           aria-label="Messages"
         >
-          <span>â™¡</span>
+          <MessageCircle size={22} />
         </button>
 
         {/* PROFILE */}
-
         <button
           className={`bottom-nav-btn ${
             activePage === "profile" && !connectionPage ? "active" : ""
@@ -1462,7 +1782,7 @@ function App() {
           }}
           aria-label="Profile"
         >
-          <span>◉</span>
+          <User size={22} />
         </button>
       </nav>
 
@@ -1479,9 +1799,17 @@ function App() {
       {showStoryModal && (
         <div className="story-upload-overlay" onClick={() => setShowStoryModal(false)}>
           <div className="story-upload-box" onClick={(e) => e.stopPropagation()}>
-            <h3>
-              Create Story <span>✨</span>
-            </h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 style={{ margin: 0 }}>Create Story</h3>
+              <button
+                type="button"
+                className="story-viewer-close"
+                onClick={() => setShowStoryModal(false)}
+                title="Close"
+              >
+                <X size={18} />
+              </button>
+            </div>
 
             {storyImage && (
               <img src={storyImage} alt="Story preview" className="story-upload-preview" />
@@ -1548,8 +1876,9 @@ function App() {
                 type="button"
                 className="story-viewer-close"
                 onClick={() => setViewingStory(null)}
+                aria-label="Close"
               >
-                ✕
+                <X size={18} />
               </button>
             </div>
 
