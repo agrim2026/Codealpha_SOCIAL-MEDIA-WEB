@@ -1,5 +1,5 @@
 import "./App.css";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 // =====================================================
 // LIVE BACKEND API URL
@@ -31,6 +31,25 @@ function App() {
 
   const [posts, setPosts] = useState([]);
   const [postContent, setPostContent] = useState("");
+  const [postImage, setPostImage] = useState("");
+  const postFileInputRef = useRef(null);
+
+  // =====================================================
+  // NOTIFICATIONS
+  // =====================================================
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // =====================================================
+  // STORIES
+  // =====================================================
+  const [stories, setStories] = useState([]);
+  const [showStoryModal, setShowStoryModal] = useState(false);
+  const [storyImage, setStoryImage] = useState("");
+  const [storyCaption, setStoryCaption] = useState("");
+  const [isUploadingStory, setIsUploadingStory] = useState(false);
+  const [viewingStory, setViewingStory] = useState(null);
+  const storyFileInputRef = useRef(null);
 
   // =====================================================
   // PAGE
@@ -148,6 +167,165 @@ function App() {
   };
 
   // =====================================================
+  // NOTIFICATIONS HANDLERS
+  // =====================================================
+
+  const fetchNotifications = async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const response = await fetch(`${API_URL}/api/notifications`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setNotifications(data);
+        const unread = data.filter((n) => !n.read).length;
+        setUnreadCount(unread);
+      }
+    } catch (error) {
+      console.log("Fetch notifications error:", error);
+    }
+  };
+
+  const openNotifications = async () => {
+    setActivePage("notifications");
+    setConnectionPage(null);
+
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      setUnreadCount(0);
+      await fetch(`${API_URL}/api/notifications/mark-read`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+    } catch (error) {
+      console.log("Mark read error:", error);
+    }
+  };
+
+  // =====================================================
+  // STORIES HANDLERS
+  // =====================================================
+
+  const fetchStories = async () => {
+    try {
+      const token = getToken();
+      if (!token) return;
+
+      const response = await fetch(`${API_URL}/api/stories`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setStories(data);
+      }
+    } catch (error) {
+      console.log("Fetch stories error:", error);
+    }
+  };
+
+  const handleStoryFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      alert("Image size must be less than 8MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      setStoryImage(uploadEvent.target.result);
+      setShowStoryModal(true);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleUploadStory = async () => {
+    if (!storyImage) {
+      alert("Please select a photo first!");
+      return;
+    }
+
+    try {
+      setIsUploadingStory(true);
+      const token = getToken();
+      if (!token) {
+        alert("Please login again.");
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/api/stories`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          image: storyImage,
+          caption: storyCaption.trim(),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.message || "Story upload failed âŒ");
+        return;
+      }
+
+      setStoryImage("");
+      setStoryCaption("");
+      setShowStoryModal(false);
+      await fetchStories();
+      alert("Story posted successfully! âœ¨");
+    } catch (error) {
+      console.error("Story upload error:", error);
+      alert("Could not post story âŒ");
+    } finally {
+      setIsUploadingStory(false);
+    }
+  };
+
+  // =====================================================
+  // POST IMAGE HANDLER
+  // =====================================================
+
+  const handlePostImageChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 8 * 1024 * 1024) {
+      alert("Image size must be less than 8MB");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      setPostImage(uploadEvent.target.result);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  // =====================================================
   // INITIAL FETCH
   // =====================================================
 
@@ -155,6 +333,15 @@ function App() {
     if (user) {
       fetchCurrentUser();
       fetchPosts();
+      fetchStories();
+      fetchNotifications();
+
+      // Periodic check for new like notifications
+      const interval = setInterval(() => {
+        fetchNotifications();
+      }, 12000);
+
+      return () => clearInterval(interval);
     }
   }, [user?.id]);
 
@@ -223,7 +410,7 @@ function App() {
       // REGISTER
       // =========================
       else {
-        setMessage("Registration successful ✅");
+        setMessage("Registration successful âœ…");
 
         setIsLogin(true);
 
@@ -234,7 +421,7 @@ function App() {
     } catch (error) {
       console.error("Auth error:", error);
 
-      setMessage("Server se connect nahi ho pa raha ❌");
+      setMessage("Server se connect nahi ho pa raha âŒ");
     }
   };
 
@@ -261,8 +448,8 @@ function App() {
   // =====================================================
 
   const handleCreatePost = async () => {
-    if (!postContent.trim()) {
-      alert("Please write something first ✍️");
+    if (!postContent.trim() && !postImage) {
+      alert("Please write something or select a photo! 📷");
       return;
     }
 
@@ -284,6 +471,7 @@ function App() {
 
         body: JSON.stringify({
           content: postContent.trim(),
+          image: postImage || "",
         }),
       });
 
@@ -297,6 +485,7 @@ function App() {
       }
 
       setPostContent("");
+      setPostImage("");
 
       await fetchPosts();
 
@@ -338,15 +527,16 @@ function App() {
       console.log("LIKE RESPONSE:", data);
 
       if (!response.ok) {
-        alert(data.message || "Like failed ❌");
+        alert(data.message || "Like failed âŒ");
         return;
       }
 
       await fetchPosts();
+      await fetchNotifications();
     } catch (error) {
       console.error("Like error:", error);
 
-      alert("Server se connect nahi ho pa raha ❌");
+      alert("Server se connect nahi ho pa raha âŒ");
     }
   };
 
@@ -401,7 +591,7 @@ function App() {
     } catch (error) {
       console.error("Search error:", error);
 
-      setSearchMessage("Server se connect nahi ho pa raha ❌");
+      setSearchMessage("Server se connect nahi ho pa raha âŒ");
     }
   };
 
@@ -449,7 +639,7 @@ function App() {
 
       setSearchMessage(
         data.following
-          ? "User followed successfully ✅"
+          ? "User followed successfully âœ…"
           : "User unfollowed successfully",
       );
 
@@ -458,7 +648,7 @@ function App() {
     } catch (error) {
       console.error("Follow error:", error);
 
-      setSearchMessage("User follow nahi ho pa raha ❌");
+      setSearchMessage("User follow nahi ho pa raha âŒ");
     }
   };
 
@@ -507,7 +697,7 @@ function App() {
     } catch (error) {
       console.error("Connections error:", error);
 
-      alert("Server se connect nahi ho pa raha ❌");
+      alert("Server se connect nahi ho pa raha âŒ");
     } finally {
       setConnectionLoading(false);
     }
@@ -586,11 +776,15 @@ function App() {
 
   const HomePage = () => (
     <>
-      {/* YOUR STORY */}
+      {/* YOUR STORY & ALL STORIES */}
 
       <section className="stories-section">
         <div className="stories-container">
-          <div className="story">
+          <div
+            className="story"
+            onClick={() => storyFileInputRef.current?.click()}
+            title="Add your story"
+          >
             <div className="story-ring own-story">
               <div className="story-avatar">
                 {user?.name?.charAt(0)?.toUpperCase() || "A"}
@@ -601,13 +795,34 @@ function App() {
 
             <span className="story-name">Your story</span>
           </div>
+
+          {stories.map((st) => {
+            const author = st.userId;
+            const authorName = author?.name || "VIORA User";
+            const authorLetter = authorName.charAt(0).toUpperCase() || "U";
+
+            return (
+              <div
+                key={st._id}
+                className="story"
+                onClick={() => setViewingStory(st)}
+                title={`View ${authorName}'s story`}
+              >
+                <div className="story-ring">
+                  <div className="story-avatar">{authorLetter}</div>
+                </div>
+
+                <span className="story-name">{authorName.split(" ")[0]}</span>
+              </div>
+            );
+          })}
         </div>
       </section>
 
       {/* WELCOME */}
 
       <div className="home-welcome">
-        <h2>Welcome to VIORA ✨</h2>
+        <h2>Welcome to VIORA âœ¨</h2>
 
         <p>See what's happening with people you follow.</p>
       </div>
@@ -618,7 +833,7 @@ function App() {
 
       {posts.length === 0 ? (
         <div className="empty">
-          <div className="empty-icon">✨</div>
+          <div className="empty-icon">âœ¨</div>
 
           <h3>Your feed is empty</h3>
 
@@ -662,13 +877,21 @@ function App() {
                   className="more-btn"
                   onClick={() => alert("More options coming soon")}
                 >
-                  ⋯
+                  â‹¯
                 </button>
               </div>
 
               {/* CONTENT */}
 
-              <div className="post-content">{post.content}</div>
+                            {/* CONTENT */}
+              {post.content && <div className="post-content">{post.content}</div>}
+
+              {/* POST PHOTO */}
+              {post.image && (
+                <div className="post-image-container">
+                  <img src={post.image} alt="Post content" className="post-image" />
+                </div>
+              )}
 
               {/* ACTIONS */}
 
@@ -677,14 +900,14 @@ function App() {
                   onClick={() => handleLike(post._id)}
                   className={isLiked ? "liked" : ""}
                 >
-                  {isLiked ? "♥" : "♡"} {likeCount}
+                  {isLiked ? "â™¥" : "â™¡"} {likeCount}
                 </button>
 
-                <button onClick={() => alert("Comments coming soon 💬")}>
-                  💬
+                <button onClick={() => alert("Comments coming soon ðŸ’¬")}>
+                  ðŸ’¬
                 </button>
 
-                <button onClick={() => alert("Share coming soon ↗️")}>↗</button>
+                <button onClick={() => alert("Share coming soon â†—ï¸")}>â†—</button>
               </div>
             </article>
           );
@@ -716,7 +939,7 @@ function App() {
         />
 
         <button className="search-btn" onClick={handleSearchUser}>
-          🔍
+          ðŸ”
         </button>
       </section>
 
@@ -763,12 +986,36 @@ function App() {
           />
         </div>
 
+                {postImage && (
+          <div className="image-preview-box">
+            <img src={postImage} alt="Selected preview" className="preview-img" />
+            <button
+              type="button"
+              className="remove-img-btn"
+              onClick={() => setPostImage("")}
+              title="Remove image"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         <div className="create-post-bottom">
+          <input
+            type="file"
+            ref={postFileInputRef}
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={handlePostImageChange}
+          />
+
           <button
+            type="button"
             className="media-btn"
-            onClick={() => alert("Photo upload coming soon 📷")}
+            onClick={() => postFileInputRef.current?.click()}
+            title="Add photo"
           >
-            📷
+            📷 Photo
           </button>
 
           <button className="post-submit-btn" onClick={handleCreatePost}>
@@ -814,7 +1061,7 @@ function App() {
         <div className="chat-window">
           {!selectedChat ? (
             <div className="no-chat">
-              <div className="no-chat-icon">💬</div>
+              <div className="no-chat-icon">ðŸ’¬</div>
 
               <h3>Your Messages</h3>
 
@@ -856,7 +1103,7 @@ function App() {
                     }
                   }}
                 >
-                  ➤
+                  âž¤
                 </button>
               </div>
             </>
@@ -883,7 +1130,7 @@ function App() {
               setConnectionUsers([]);
             }}
           >
-            ←
+            â†
           </button>
 
           <h1 className="page-title">{title}</h1>
@@ -891,7 +1138,7 @@ function App() {
 
         {connectionLoading ? (
           <div className="empty">
-            <div className="empty-icon">⏳</div>
+            <div className="empty-icon">â³</div>
 
             <h3>Loading...</h3>
 
@@ -899,7 +1146,7 @@ function App() {
           </div>
         ) : connectionUsers.length === 0 ? (
           <div className="empty">
-            <div className="empty-icon">👥</div>
+            <div className="empty-icon">ðŸ‘¥</div>
 
             <h3>
               {connectionPage === "followers"
@@ -933,6 +1180,68 @@ function App() {
       </div>
     );
   };
+
+  // =====================================================
+  // NOTIFICATIONS PAGE
+  // =====================================================
+
+  const NotificationsPage = () => (
+    <div className="page-content notifications-page">
+      <div className="connections-header">
+        <button
+          className="back-btn"
+          onClick={() => setActivePage("home")}
+        >
+          ←
+        </button>
+        <h1 className="page-title">Notifications</h1>
+      </div>
+
+      {notifications.length === 0 ? (
+        <div className="empty">
+          <div className="empty-icon">🔔</div>
+          <h3>No notifications yet</h3>
+          <p>When someone likes your post, you will receive an alert here.</p>
+        </div>
+      ) : (
+        <div className="notifications-list">
+          {notifications.map((notif) => {
+            const senderLetter =
+              notif.sender?.name?.charAt(0)?.toUpperCase() || "U";
+
+            return (
+              <div
+                key={notif._id}
+                className={`notification-item ${!notif.read ? "unread" : ""}`}
+              >
+                <div className="notification-avatar">{senderLetter}</div>
+                <div className="notification-content">
+                  <div className="notification-msg">{notif.message}</div>
+                  <div className="notification-time">
+                    {notif.createdAt
+                      ? new Date(notif.createdAt).toLocaleString([], {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Recently"}
+                  </div>
+                </div>
+                {notif.post?.image && (
+                  <img
+                    src={notif.post.image}
+                    alt="Post thumb"
+                    className="notification-thumb"
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   // =====================================================
   // PROFILE PAGE
@@ -993,7 +1302,7 @@ function App() {
 
         <button
           className="edit-profile-btn"
-          onClick={() => alert("Edit Profile coming soon ✨")}
+          onClick={() => alert("Edit Profile coming soon âœ¨")}
         >
           Edit Profile
         </button>
@@ -1024,7 +1333,7 @@ function App() {
             onClick={() => setActivePage("create")}
             aria-label="Create"
           >
-            ＋
+            ï¼‹
           </button>
         </div>
 
@@ -1032,11 +1341,14 @@ function App() {
 
         <div className="nav-right">
           <button
-            className="nav-icon"
-            onClick={() => alert("Notifications coming soon ❤️")}
+            className="nav-icon notification-btn"
+            onClick={openNotifications}
             aria-label="Notifications"
           >
             ♡
+            {unreadCount > 0 && (
+              <span className="notification-badge">{unreadCount}</span>
+            )}
           </button>
         </div>
       </header>
@@ -1058,6 +1370,8 @@ function App() {
         <CreatePage />
       ) : activePage === "messages" ? (
         <MessagesPage />
+      ) : activePage === "notifications" ? (
+        <NotificationsPage />
       ) : activePage === "profile" ? (
         <ProfilePage />
       ) : (
@@ -1084,7 +1398,7 @@ function App() {
           }}
           aria-label="Home"
         >
-          <span>⌂</span>
+          <span>âŒ‚</span>
         </button>
 
         {/* SEARCH */}
@@ -1100,7 +1414,7 @@ function App() {
           }}
           aria-label="Search"
         >
-          <span>⌕</span>
+          <span>âŒ•</span>
         </button>
 
         {/* CREATE */}
@@ -1116,7 +1430,7 @@ function App() {
           }}
           aria-label="Create"
         >
-          <span>＋</span>
+          <span>ï¼‹</span>
         </button>
 
         {/* MESSAGES */}
@@ -1132,7 +1446,7 @@ function App() {
           }}
           aria-label="Messages"
         >
-          <span>♡</span>
+          <span>â™¡</span>
         </button>
 
         {/* PROFILE */}
@@ -1151,6 +1465,104 @@ function App() {
           <span>◉</span>
         </button>
       </nav>
+
+      {/* HIDDEN STORY FILE INPUT */}
+      <input
+        type="file"
+        ref={storyFileInputRef}
+        accept="image/*"
+        style={{ display: "none" }}
+        onChange={handleStoryFileSelect}
+      />
+
+      {/* STORY UPLOAD MODAL */}
+      {showStoryModal && (
+        <div className="story-upload-overlay" onClick={() => setShowStoryModal(false)}>
+          <div className="story-upload-box" onClick={(e) => e.stopPropagation()}>
+            <h3>
+              Create Story <span>✨</span>
+            </h3>
+
+            {storyImage && (
+              <img src={storyImage} alt="Story preview" className="story-upload-preview" />
+            )}
+
+            <input
+              type="text"
+              placeholder="Add a caption... (optional)"
+              value={storyCaption}
+              onChange={(e) => setStoryCaption(e.target.value)}
+              className="story-upload-caption"
+            />
+
+            <div className="story-upload-actions">
+              <button
+                type="button"
+                className="story-btn-cancel"
+                onClick={() => {
+                  setShowStoryModal(false);
+                  setStoryImage("");
+                  setStoryCaption("");
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="story-btn-submit"
+                disabled={isUploadingStory}
+                onClick={handleUploadStory}
+              >
+                {isUploadingStory ? "Posting..." : "Share Story"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STORY VIEWER MODAL */}
+      {viewingStory && (
+        <div className="story-viewer-overlay" onClick={() => setViewingStory(null)}>
+          <div className="story-viewer-card" onClick={(e) => e.stopPropagation()}>
+            <div className="story-viewer-header">
+              <div className="story-viewer-user">
+                <div className="story-viewer-avatar">
+                  {viewingStory.userId?.name?.charAt(0)?.toUpperCase() || "U"}
+                </div>
+                <div>
+                  <div className="story-viewer-name">
+                    {viewingStory.userId?.name || "VIORA User"}
+                  </div>
+                  <div className="story-viewer-time">
+                    {viewingStory.createdAt
+                      ? new Date(viewingStory.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "Recently"}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="story-viewer-close"
+                onClick={() => setViewingStory(null)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="story-viewer-img-container">
+              <img src={viewingStory.image} alt="Story" className="story-viewer-img" />
+            </div>
+
+            {viewingStory.caption && (
+              <div className="story-viewer-footer">{viewingStory.caption}</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

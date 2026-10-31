@@ -8,6 +8,8 @@ const jwt = require("jsonwebtoken");
 
 const User = require("./models/User");
 const Post = require("./models/Post");
+const Notification = require("./models/Notification");
+const Story = require("./models/Story");
 
 const authMiddleware = require("./middleware/authMiddleware");
 
@@ -18,7 +20,8 @@ const app = express();
 // =====================================================
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "15mb" }));
+app.use(express.urlencoded({ extended: true, limit: "15mb" }));
 
 // =====================================================
 // REGISTER
@@ -382,13 +385,12 @@ app.post("/api/users/:id/follow", authMiddleware, async (req, res) => {
 
 app.post("/api/posts", authMiddleware, async (req, res) => {
   try {
-    const { content } = req.body;
-
+    const { content, image } = req.body;
     const userId = req.user.userId;
 
-    if (!content || !content.trim()) {
+    if ((!content || !content.trim()) && !image) {
       return res.status(400).json({
-        message: "Content is required",
+        message: "Content or photo is required",
       });
     }
 
@@ -401,7 +403,8 @@ app.post("/api/posts", authMiddleware, async (req, res) => {
     }
 
     const post = await Post.create({
-      content: content.trim(),
+      content: content ? content.trim() : "",
+      image: image || "",
       userId,
     });
 
@@ -501,6 +504,22 @@ app.put("/api/posts/:id/like", authMiddleware, async (req, res) => {
       );
     } else {
       post.likes.push(userId);
+
+      // Create notification for post owner if not self-like
+      if (post.userId.toString() !== userId.toString()) {
+        try {
+          const liker = await User.findById(userId).select("name");
+          await Notification.create({
+            recipient: post.userId,
+            sender: userId,
+            type: "like",
+            post: post._id,
+            message: `${liker?.name || "Someone"} liked your post ❤️`,
+          });
+        } catch (notifErr) {
+          console.error("Notification creation error:", notifErr);
+        }
+      }
     }
 
     await post.save();
@@ -592,6 +611,104 @@ app.delete("/api/posts/:id", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Delete Post Error:", error);
 
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
+// NOTIFICATIONS
+// =====================================================
+
+app.get("/api/notifications", authMiddleware, async (req, res) => {
+  try {
+    const notifications = await Notification.find({
+      recipient: req.user.userId,
+    })
+      .populate("sender", "name email")
+      .populate("post", "content image")
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.json(notifications);
+  } catch (error) {
+    console.error("Get Notifications Error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
+});
+
+app.put("/api/notifications/mark-read", authMiddleware, async (req, res) => {
+  try {
+    await Notification.updateMany(
+      { recipient: req.user.userId, read: false },
+      { $set: { read: true } },
+    );
+    res.json({ message: "Notifications marked as read" });
+  } catch (error) {
+    console.error("Mark Read Error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
+});
+
+// =====================================================
+// STORIES
+// =====================================================
+
+app.post("/api/stories", authMiddleware, async (req, res) => {
+  try {
+    const { image, caption } = req.body;
+
+    if (!image) {
+      return res.status(400).json({
+        message: "Photo is required for story",
+      });
+    }
+
+    const story = await Story.create({
+      userId: req.user.userId,
+      image,
+      caption: (caption || "").trim(),
+    });
+
+    const populatedStory = await Story.findById(story._id).populate(
+      "userId",
+      "name email",
+    );
+
+    res.status(201).json({
+      message: "Story created successfully",
+      story: populatedStory,
+    });
+  } catch (error) {
+    console.error("Create Story Error:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
+});
+
+app.get("/api/stories", authMiddleware, async (req, res) => {
+  try {
+    // Stories from the last 24 hours
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const stories = await Story.find({
+      createdAt: { $gte: oneDayAgo },
+    })
+      .populate("userId", "name email")
+      .sort({ createdAt: -1 });
+
+    res.json(stories);
+  } catch (error) {
+    console.error("Get Stories Error:", error);
     res.status(500).json({
       message: "Server error",
       error: error.message,
