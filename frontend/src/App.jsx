@@ -1,6 +1,12 @@
 import "./App.css";
 import { useEffect, useState } from "react";
 
+// =====================================================
+// LIVE BACKEND API URL
+// =====================================================
+const RAW_API_URL = import.meta.env.VITE_API_URL || "https://codealpha-social-media-web.onrender.com";
+const API_URL = RAW_API_URL.replace(/\/+$/, "");
+
 function App() {
   // =====================================================
   // AUTH
@@ -75,7 +81,7 @@ function App() {
 
       if (!token) return;
 
-      const response = await fetch("http://localhost:5000/api/posts", {
+      const response = await fetch(`${API_URL}/api/posts`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -112,7 +118,7 @@ function App() {
 
       if (!token) return;
 
-      const response = await fetch("http://localhost:5000/api/users/me", {
+      const response = await fetch(`${API_URL}/api/users/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -163,8 +169,8 @@ function App() {
 
     try {
       const url = isLogin
-        ? "http://localhost:5000/api/login"
-        : "http://localhost:5000/api/register";
+        ? `${API_URL}/api/login`
+        : `${API_URL}/api/register`;
 
       const body = isLogin
         ? {
@@ -268,7 +274,7 @@ function App() {
         return;
       }
 
-      const response = await fetch("http://localhost:5000/api/posts", {
+      const response = await fetch(`${API_URL}/api/posts`, {
         method: "POST",
 
         headers: {
@@ -316,7 +322,7 @@ function App() {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/posts/${postId}/like`,
+        `${API_URL}/api/posts/${postId}/like`,
         {
           method: "PUT",
 
@@ -367,7 +373,7 @@ function App() {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/users/search/${encodeURIComponent(
+        `${API_URL}/api/users/search/${encodeURIComponent(
           searchName.trim(),
         )}`,
         {
@@ -417,7 +423,7 @@ function App() {
       }
 
       const response = await fetch(
-        `http://localhost:5000/api/users/${searchUser._id}/follow`,
+        `${API_URL}/api/users/${searchUser._id}/follow`,
         {
           method: "POST",
 
@@ -474,7 +480,7 @@ function App() {
       setConnectionUsers([]);
 
       const response = await fetch(
-        `http://localhost:5000/api/users/connections/${type}`,
+        `${API_URL}/api/users/connections/${type}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
