@@ -1,11 +1,6 @@
 import "./App.css";
 import { useEffect, useState } from "react";
 
-// =====================================================
-// LIVE BACKEND URL
-// =====================================================
-
-const API_URL = import.meta.env.VITE_API_URL;
 function App() {
   // =====================================================
   // AUTH
@@ -80,8 +75,7 @@ function App() {
 
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/api/posts`, {
-        method: "GET",
+      const response = await fetch("http://localhost:5000/api/posts", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -104,7 +98,7 @@ function App() {
         setPosts([]);
       }
     } catch (error) {
-      console.error("Posts fetch error:", error);
+      console.log("Posts fetch error:", error);
     }
   };
 
@@ -118,8 +112,7 @@ function App() {
 
       if (!token) return;
 
-      const response = await fetch(`${API_URL}/api/users/me`, {
-        method: "GET",
+      const response = await fetch("http://localhost:5000/api/users/me", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -144,7 +137,7 @@ function App() {
 
       setFollowingUsers(data.following || []);
     } catch (error) {
-      console.error("Current user fetch error:", error);
+      console.log("Current user fetch error:", error);
     }
   };
 
@@ -169,20 +162,20 @@ function App() {
     setMessage("");
 
     try {
-      const url = isLogin ? `${API_URL}/api/login` : `${API_URL}/api/register`;
+      const url = isLogin
+        ? "http://localhost:5000/api/login"
+        : "http://localhost:5000/api/register";
 
       const body = isLogin
         ? {
-            email: email.trim(),
+            email,
             password,
           }
         : {
-            name: name.trim(),
-            email: email.trim(),
+            name,
+            email,
             password,
           };
-
-      console.log("AUTH REQUEST:", url);
 
       const response = await fetch(url, {
         method: "POST",
@@ -196,32 +189,21 @@ function App() {
 
       const data = await response.json();
 
-      console.log("AUTH RESPONSE:", response.status, data);
-
       if (!response.ok) {
         setMessage(data.message || "Something went wrong");
         return;
       }
 
-      // =================================================
+      // =========================
       // LOGIN
-      // =================================================
+      // =========================
 
       if (isLogin) {
         localStorage.setItem("token", data.token);
 
-        localStorage.setItem(
-          "user",
-          JSON.stringify({
-            ...data.user,
-            id: data.user.id || data.user._id,
-          }),
-        );
+        localStorage.setItem("user", JSON.stringify(data.user));
 
-        setUser({
-          ...data.user,
-          id: data.user.id || data.user._id,
-        });
+        setUser(data.user);
 
         setEmail("");
         setPassword("");
@@ -231,9 +213,9 @@ function App() {
         setMessage("");
       }
 
-      // =================================================
+      // =========================
       // REGISTER
-      // =================================================
+      // =========================
       else {
         setMessage("Registration successful ✅");
 
@@ -286,7 +268,7 @@ function App() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/api/posts`, {
+      const response = await fetch("http://localhost:5000/api/posts", {
         method: "POST",
 
         headers: {
@@ -333,13 +315,16 @@ function App() {
         return;
       }
 
-      const response = await fetch(`${API_URL}/api/posts/${postId}/like`, {
-        method: "PUT",
+      const response = await fetch(
+        `http://localhost:5000/api/posts/${postId}/like`,
+        {
+          method: "PUT",
 
-        headers: {
-          Authorization: `Bearer ${token}`,
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       const data = await response.json();
 
@@ -382,10 +367,10 @@ function App() {
       }
 
       const response = await fetch(
-        `${API_URL}/api/users/search/${encodeURIComponent(searchName.trim())}`,
+        `http://localhost:5000/api/users/search/${encodeURIComponent(
+          searchName.trim(),
+        )}`,
         {
-          method: "GET",
-
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -432,7 +417,7 @@ function App() {
       }
 
       const response = await fetch(
-        `${API_URL}/api/users/${searchUser._id}/follow`,
+        `http://localhost:5000/api/users/${searchUser._id}/follow`,
         {
           method: "POST",
 
@@ -488,13 +473,14 @@ function App() {
       setConnectionPage(type);
       setConnectionUsers([]);
 
-      const response = await fetch(`${API_URL}/api/users/connections/${type}`, {
-        method: "GET",
-
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await fetch(
+        `http://localhost:5000/api/users/connections/${type}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       const data = await response.json();
 
@@ -594,6 +580,8 @@ function App() {
 
   const HomePage = () => (
     <>
+      {/* YOUR STORY */}
+
       <section className="stories-section">
         <div className="stories-container">
           <div className="story">
@@ -610,11 +598,15 @@ function App() {
         </div>
       </section>
 
+      {/* WELCOME */}
+
       <div className="home-welcome">
         <h2>Welcome to VIORA ✨</h2>
 
         <p>See what's happening with people you follow.</p>
       </div>
+
+      {/* FEED */}
 
       <div className="feed-title">Home Feed</div>
 
@@ -645,6 +637,8 @@ function App() {
 
           return (
             <article className="post" key={post._id || index}>
+              {/* POST HEADER */}
+
               <div className="post-header">
                 <div className="avatar">{avatarLetter}</div>
 
@@ -666,7 +660,11 @@ function App() {
                 </button>
               </div>
 
+              {/* CONTENT */}
+
               <div className="post-content">{post.content}</div>
+
+              {/* ACTIONS */}
 
               <div className="post-actions">
                 <button
@@ -725,7 +723,7 @@ function App() {
           <div className="search-user-info">
             <strong>{searchUser.name || "VIORA User"}</strong>
 
-            <span>{searchUser.email}</span>
+            <span>{searchUser.name}</span>
           </div>
 
           <button className="add-user-btn" onClick={handleAddUser}>
@@ -953,12 +951,18 @@ function App() {
 
         <p className="profile-email">{user?.email}</p>
 
+        {/* PROFILE STATS */}
+
         <section className="profile-stats">
+          {/* POSTS */}
+
           <div className="stat">
             <strong>{myPosts.length}</strong>
 
             <span>Posts</span>
           </div>
+
+          {/* FOLLOWERS */}
 
           <button
             className="stat stat-button"
@@ -968,6 +972,8 @@ function App() {
 
             <span>Followers</span>
           </button>
+
+          {/* FOLLOWING */}
 
           <button
             className="stat stat-button"
@@ -997,6 +1003,8 @@ function App() {
 
   // =====================================================
   // MAIN PAGE
+  // IMPORTANT:
+  // YAHAN HAR PAGE SIRF EK BAAR RENDER HOGA
   // =====================================================
 
   return (
@@ -1027,7 +1035,10 @@ function App() {
         </div>
       </header>
 
-      {/* PAGE CONTENT */}
+      {/* =================================================
+          PAGE CONTENT
+          ONLY ONE PAGE RENDERS AT A TIME
+      ================================================= */}
 
       {connectionPage ? (
         <ConnectionsPage />
@@ -1049,7 +1060,9 @@ function App() {
         </main>
       )}
 
-      {/* BOTTOM NAV */}
+      {/* =================================================
+          BOTTOM NAV
+      ================================================= */}
 
       <nav className="bottom-nav">
         {/* HOME */}
